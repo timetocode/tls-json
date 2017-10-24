@@ -21,14 +21,29 @@ class Server extends EventEmitter {
             var id = this.socketId++
             this.sockets.set(id, socket)
 
-            socket.setEncoding('utf8')           
+            socket.setEncoding('utf8')
         
             var stream = JSONStream()
             socket.pipe(stream)
     
             stream.on('data', message => {
                 if (socket.isAuthenticated) {
-                    this.emit('message', id,  message)
+                    if (message.requestId) {
+                        var requestId = message.requestId
+                        delete message.requestId
+                        this.emit('request', 
+                            id, 
+                            message, 
+                            {
+                                send: msg => {
+                                    msg.requestId = requestId
+                                    this.send(id, msg)
+                                }
+                            }
+                        )                        
+                    } else {
+                        this.emit('message', id,  message)
+                    }                    
                 } else {
                     // first message must be the password, and it must be correct, else destroy
                     if (message.password === this.password) {

@@ -1,11 +1,19 @@
 {
   "name": "tls-json",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "description": "A small server and client api for sending json over tls.",
   "main": "index.js",
   "author": "Alex Bennett // timetocode",
   "license": "MIT",
   "dependencies": {
     "json-stream": "^1.0.0"
-  }
+  },
+  "keywords": [
+    "tls",
+    "server",
+    "client",
+    "json",
+    "password",
+    "ssl"
+  ]
 }

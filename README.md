@@ -1,8 +1,8 @@
-# master-server
+# tls-json
 A client and server that communicate over tls by sending json messages after verification of a password.
 
 # Install
-    npm install master-server
+    npm install tls-json
 
 # Usage
 
@@ -42,6 +42,11 @@ server.on('message', (id, message) => {
     console.log('received', message, 'from', id)
 })
 
+server.on('request', (id, message, response) => {
+    console.log('received', message, 'as a request, responding')
+    response.send({ blah: "this response is specific to your message" })
+})
+
 server.listen(8000, () => {
     console.log('Listening...')
 })
@@ -71,7 +76,11 @@ client.send({ blahblah: "a tree falls" })
 
 client.on('authenticated', () => {
     console.log('Authenticated!')
-    client.send({ blahblah: "now I can talk to the server!" })
+    client.send({ blahblah: "hi server!" })
+    // and/or
+    client.request({ blahblah: "can I please have the user profile for id#40312321?" }, function(response) {
+        console.log('and receive a specific response:', response)
+    })
 })
 
 client.on('message', message => {

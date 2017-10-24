@@ -5,10 +5,12 @@ const EventEmitter = require('events')
 class Client extends EventEmitter {
     constructor(config) {
         super()
+        this.requestId = 1
         this.socket = null
         this.isConnected = false
         this.isAuthenticated = false
         this.attemptsToReconnect = config.attemptsToReconnect > 0
+        this.pendingRequests = new Map()
         
         this.options = {
             ca: [ config.cert ]
@@ -22,6 +24,11 @@ class Client extends EventEmitter {
             
                 stream.on('data', message => {
                     if (this.isAuthenticated) {
+                        if (message.requestId) {
+                            var id = message.requestId
+                            delete message.requestId
+                            this.pendingRequests.get(id)(message) // invoke the callback
+                        }
                         this.emit('message', message) 
                     } else {
                         if (message.authenticated === true) {
@@ -61,6 +68,14 @@ class Client extends EventEmitter {
 
     send(object) {
         if (this.socket && this.isAuthenticated) {
+            this.socket.write(JSON.stringify(object) + '\n')
+        }
+    }
+
+    request(object, callback) { 
+        if (this.socket && this.isAuthenticated) {
+            object.requestId = this.requestId++
+            this.pendingRequests.set(object.requestId, callback)
             this.socket.write(JSON.stringify(object) + '\n')
         }
     }
