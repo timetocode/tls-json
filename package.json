@@ -1,12 +1,16 @@
 {
   "name": "tls-json",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A small server and client api for sending json over tls.",
   "main": "index.js",
   "author": "Alex Bennett // timetocode",
   "license": "MIT",
   "dependencies": {
     "json-stream": "^1.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/timetocode/tls-json.git"
   },
   "keywords": [
     "tls",

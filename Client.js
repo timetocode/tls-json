@@ -28,8 +28,9 @@ class Client extends EventEmitter {
                             var id = message.requestId
                             delete message.requestId
                             this.pendingRequests.get(id)(message) // invoke the callback
-                        }
-                        this.emit('message', message) 
+                        } else {
+                            this.emit('message', message) 
+                        }                        
                     } else {
                         if (message.authenticated === true) {
                             this.isAuthenticated = true
