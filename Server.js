@@ -1,6 +1,9 @@
 const tls = require('tls')
 const JSONStream = require('json-stream')
 const EventEmitter = require('events')
+const createError = require('create-error')
+const NotConnectedError = createError('NotConnectedError')
+const RequestModule = require('./RequestModule')
 
 class Server extends EventEmitter {
     constructor(config) {
@@ -8,42 +11,28 @@ class Server extends EventEmitter {
         this.password = config.password
         this.socketId = 0
         this.sockets = new Map()
+        this.requests = new RequestModule(config.requestTimeout || 10000)
 
-        const options = {
-            key: config.key,
-            cert: config.cert,      
-            rejectUnauthorized: true,
-        }
-        
-        this.tlsServer = tls.createServer(options, socket => {
+        this.tlsServer = tls.createServer(config.options, socket => {
             socket.isAuthenticated = false
 
-            var id = this.socketId++
+            const id = this.socketId++
             this.sockets.set(id, socket)
 
             socket.setEncoding('utf8')
-        
-            var stream = JSONStream()
+
+            const stream = JSONStream()
             socket.pipe(stream)
-    
+
             stream.on('data', message => {
                 if (socket.isAuthenticated) {
                     if (message.requestId) {
-                        var requestId = message.requestId
-                        delete message.requestId
-                        this.emit('request', 
-                            id, 
-                            message, 
-                            {
-                                send: msg => {
-                                    msg.requestId = requestId
-                                    this.send(id, msg)
-                                }
-                            }
-                        )                        
+                        this.requests.server_handleResponse(id, message, this)
+                    } else if (message.responseId) {
+                        this.requests.handleRequest(message)
                     } else {
-                        this.emit('message', id,  message)
-                    }                    
+                        this.emit('message', message)
+                    }
                 } else {
                     // first message must be the password, and it must be correct, else destroy
                     if (message.password === this.password) {
@@ -56,28 +45,40 @@ class Server extends EventEmitter {
                     }
                 }
             })
-    
+
             socket.on('close', () => {
                 this.emit('close', id)
                 this.sockets.delete(id)
             })
-    
+
             socket.on('error', err => {
                 this.emit('error', id, err)
             })
         })
     }
 
-    listen(port) {
+    listen(port, cb) {
         this.tlsServer.listen(port, () => {
-            console.log('Listening on port', port)
+            cb()
         })
     }
 
     send(id, object) {
-        var socket = this.sockets.get(id)
+        const socket = this.sockets.get(id)
         if (socket) {
             socket.write(JSON.stringify(object) + '\n')
+        } else {
+            this.emit('error', new NotConnectedError('Not connected to client.', { originalMessage: object }))
+        }
+    }
+
+    request(id, object, callback) {
+        const socket = this.sockets.get(id)
+        const requestObject = this.requests.createRequest(object, callback)
+        if (socket && socket.isAuthenticated) {
+            this.requests.sendRequest(requestObject, socket)
+        } else {
+            this.requests.notConnected(requestObject)
         }
     }
 }

@@ -1,6 +1,6 @@
 {
   "name": "tls-json",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "A small server and client api for sending json over tls.",
   "main": "index.js",
   "author": "Alex Bennett // timetocode",
@@ -18,6 +18,10 @@
     "client",
     "json",
     "password",
-    "ssl"
+    "ssl",
+    "bidirectional",
+    "request",
+    "response",
+    "reconnect"
   ]
 }

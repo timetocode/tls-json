@@ -1,83 +1,94 @@
 const tls = require('tls')
 const JSONStream = require('json-stream')
 const EventEmitter = require('events')
+const createError = require('create-error')
+const NotConnectedError = createError('NotConnectedError')
+const RequestModule = require('./RequestModule')
 
 class Client extends EventEmitter {
     constructor(config) {
         super()
-        this.requestId = 1
+        this.lastReconnectTimestamp = -1
         this.socket = null
         this.isConnected = false
         this.isAuthenticated = false
-        this.attemptsToReconnect = config.attemptsToReconnect > 0
-        this.pendingRequests = new Map()
-        
-        this.options = {
-            ca: [ config.cert ]
-        }
+        this.reconnectInterval = config.reconnectInterval || 0
+        this.requests = new RequestModule(config.requestTimeout || 10000)
 
-        var connect = () => {
-            this.socket = tls.connect(config.port, config.host, this.options, () => {
+        this.connect = () => {
+            this.socket = tls.connect(config.port, config.host, config.options, () => {
                 this.socket.setEncoding('utf8')
-                var stream = JSONStream()
-                this.socket.pipe(stream)            
-            
+                const stream = JSONStream()
+                this.socket.pipe(stream)
+
                 stream.on('data', message => {
                     if (this.isAuthenticated) {
                         if (message.requestId) {
-                            var id = message.requestId
-                            delete message.requestId
-                            this.pendingRequests.get(id)(message) // invoke the callback
+                            this.requests.client_handleResponse(message, this)
+                        } else if (message.responseId) {
+                            this.requests.handleRequest(message)
                         } else {
-                            this.emit('message', message) 
-                        }                        
+                            this.emit('message', message)
+                        }
                     } else {
                         if (message.authenticated === true) {
                             this.isAuthenticated = true
                             this.emit('authenticated')
                         }
-                    }          
+                    }
                 })
-            
+
                 this.socket.write(JSON.stringify({ password: config.password }) + '\n')
             })
-    
+
             this.socket.on('connect', () => {
                 this.isConnected = true
+                clearInterval(this.intervalRef)
             })
-    
+
             this.socket.on('error', err => {
                 this.emit('error', err)
             })
-    
+
             this.socket.on('close', () => {
+                this.requests.connectionLost()
                 this.isConnected = false
+                this.isAuthenticated = false
+                this.beginReconnectInterval()
                 this.emit('close')
             })
         }
 
-        if (this.attemptsToReconnect) {
-            this.intervalRef = setInterval(() => {
-                if (!this.connected) {
-                   connect()
-                }
-            }, config.reconnectInterval)
-        }
+        this.beginReconnectInterval()
+        this.connect()
+    }
 
-        connect()
+    beginReconnectInterval() {
+        const now = Date.now()
+        if (this.reconnectInterval > 0 && !this.isConnected && now - this.reconnectInterval > this.lastReconnectTimestamp) {
+            this.lastReconnectTimestamp = now
+            this.intervalRef = setTimeout(() => {
+                if (!this.connected) {
+                    this.connect()
+                }
+            }, this.reconnectInterval)
+        }
     }
 
     send(object) {
         if (this.socket && this.isAuthenticated) {
             this.socket.write(JSON.stringify(object) + '\n')
+        } else {
+            this.emit('error', new NotConnectedError('Not connected to server.', { originalMessage: object }))
         }
     }
 
-    request(object, callback) { 
+    request(object, callback) {
+        const requestObject = this.requests.createRequest(object, callback)
         if (this.socket && this.isAuthenticated) {
-            object.requestId = this.requestId++
-            this.pendingRequests.set(object.requestId, callback)
-            this.socket.write(JSON.stringify(object) + '\n')
+            this.requests.sendRequest(requestObject, this.socket)
+        } else {
+            this.requests.notConnected(requestObject)
         }
     }
 
@@ -86,6 +97,7 @@ class Client extends EventEmitter {
             this.socket.destroy()
         }
         clearInterval(this.intervalRef)
+        this.requests.notConnected(requestObject)
         this.attemptsToReconnect = false
     }
 }
