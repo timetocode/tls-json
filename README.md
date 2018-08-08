@@ -11,10 +11,11 @@ The api allows for bidirectional communication and it is left to the user of thi
 # Usage
 
 
-### Generate and sign a localhost cert (for development)
+### Generate cert
 ```
-# creates and self signs a localhost key+cert valid for ~10 years (dev only!!)
-openssl req -x509 -newkey rsa:4096 -sha256 -nodes -keyout localhost.key -out localhost.crt -subj "/CN=localhost" -days 3650
+openssl genrsa -out server-key.pem 4096
+openssl req -new -key server-key.pem -out server-csr.pem
+openssl x509 -req -in server-csr.pem -signkey server-key.pem -out server-cert.pem
 ```
 
 # General
