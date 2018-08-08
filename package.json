@@ -6,6 +6,7 @@
   "author": "Alex Bennett // timetocode",
   "license": "MIT",
   "dependencies": {
+    "create-error": "^0.3.1",
     "json-stream": "^1.0.0"
   },
   "repository": {
