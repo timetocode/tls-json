@@ -18,6 +18,12 @@ openssl req -new -key server-key.pem -out server-csr.pem
 openssl x509 -req -in server-csr.pem -signkey server-key.pem -out server-cert.pem
 ```
 
+### Generate localhost cert
+```
+# a dev env ~10 year cert, such as the one used in the example code below
+openssl req -x509 -newkey rsa:4096 -sha256 -nodes -keyout localhost.key -out localhost.crt -subj "/CN=localhost" -days 3650
+```
+
 # General
 The api is essentially the following events: `authenticated`, `close`, `error`, `message` where messages are javascript objects that were sent as JSON. The outgoing sections of the api are the functions `send` and `request`. Send blindly fires off a message, caring not what happens. Request sends a message and invokes a callback in a very traditional `err`, `req`, and `res` node style. The `res` object exists only so that `res.send(someObj)` can be invoked to give a response. The `err` object is null unless an request encountered an error. The `req` object is the message itself.
 
@@ -27,7 +33,7 @@ Client and server have a very similar api, with main difference being that the o
 
 ```javascript
 const fs = require('fs')
-const TLSServer = require('tls-server').Server
+const TLSServer = require('tls-json').Server
 
 const port = 8888
 
@@ -100,7 +106,7 @@ const client = new TLSClient({
     host: 'localhost',
     port: 8888,
     reconnectInterval: 2000, // in milliseconds
-    requestTimeout: 5000 // optional, defaults to 10000 which is 10 seconds
+    requestTimeout: 5000, // optional, defaults to 10000 which is 10 seconds
     password: 'this string is a password, change it'
 })
 

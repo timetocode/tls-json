@@ -68,7 +68,7 @@ class Client extends EventEmitter {
         if (this.reconnectInterval > 0 && !this.isConnected && now - this.reconnectInterval > this.lastReconnectTimestamp) {
             this.lastReconnectTimestamp = now
             this.intervalRef = setTimeout(() => {
-                if (!this.connected) {
+                if (!this.isConnected) {
                     this.connect()
                 }
             }, this.reconnectInterval)
