@@ -18,27 +18,27 @@ class Client extends EventEmitter {
         this.connect = () => {
             this.socket = tls.connect(config.port, config.host, config.options, () => {
                 this.socket.setEncoding('utf8')
-                const stream = JSONStream()
-                this.socket.pipe(stream)
-
-                stream.on('data', message => {
-                    if (this.isAuthenticated) {
-                        if (message.requestId) {
-                            this.requests.client_handleResponse(message, this)
-                        } else if (message.responseId) {
-                            this.requests.handleRequest(message)
-                        } else {
-                            this.emit('message', message)
-                        }
-                    } else {
-                        if (message.authenticated === true) {
-                            this.isAuthenticated = true
-                            this.emit('authenticated')
-                        }
-                    }
-                })
-
                 this.socket.write(JSON.stringify({ password: config.password }) + '\n')
+            })
+
+            const stream = JSONStream()
+            this.socket.pipe(stream)
+
+            stream.on('data', message => {
+                if (this.isAuthenticated) {
+                    if (message.requestId) {
+                        this.requests.client_handleResponse(message, this)
+                    } else if (message.responseId) {
+                        this.requests.handleRequest(message)
+                    } else {
+                        this.emit('message', message)
+                    }
+                } else {
+                    if (message.authenticated === true) {
+                        this.isAuthenticated = true
+                        this.emit('authenticated')
+                    }
+                }
             })
 
             this.socket.on('connect', () => {
