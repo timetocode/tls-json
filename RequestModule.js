@@ -1,71 +1,53 @@
-const createError = require('create-error')
-
-const RequestTimedOutError = createError('RequestTimedOutError')
-const RequestNotConnectedError = createError('RequestNotConnectedError')
-const RequestConnectionLostError = createError('RequestConnectionLostError')
-
 class RequestModule {
     constructor(requestTimeout) {
         this.requestId = 1
         this.requests = new Map()
         this.requestTimeout = requestTimeout
-        this.interval = setInterval(() => {
-            this.checkTimeouts()
-        }, 1000)
     }
 
-    destroy() {
-        clearInterval(this.interval)
-    }
-
-    checkTimeouts() {
-        const now = Date.now()
-        this.requests.forEach((request, requestId) => {
-            if (now >= request.timestamp + this.requestTimeout) {
-                request.callback(new RequestTimedOutError('Request timed out.', { originalMessage: request.message }), null)
-                this.requests.delete(requestId)
-            }
-        })
-    }
-
-    connectionLost() {
-        this.requests.forEach((request, requestId) => {
-            request.callback(
-                new RequestConnectionLostError('Request incomplete due to connection loss.', {
-                    originalMessage: request.message
-                }), null)
-
+    cancelAll() {
+        this.requests.forEach((promise, requestId) => {
+            promise.reject(new Error('connection lost'))
             this.requests.delete(requestId)
         })
     }
 
-    notConnected(requestObject) {
-        requestObject.callback(
-            new RequestNotConnectedError('Not connected to server.', {
-                originalMessage: requestObject.message
-            }), null)
-    }
+    sendRequest(message, socket) {
+        const requestId = this.requestId++
+        message.requestId = requestId
 
-    createRequest(object, callback) {
-        const id = this.requestId++
-        object.requestId = id
-        return {
-            requestId: id,
-            timestamp: Date.now(),
-            message: object,
-            callback: callback
+        const promiseWrap = {
+            requestId,
+            originalMessage: message,
+            promise: null,
+            resolve: null,
+            reject: null
         }
+
+        const promise = new Promise((resolve, reject) => {
+            promiseWrap.resolve = resolve
+            promiseWrap.reject = reject
+            setTimeout(() => {
+                this.requests.delete(requestId)
+                reject(new Error('request timeout'))
+            }, this.requestTimeout)         
+        })
+        promiseWrap.promise = promise 
+        this.requests.set(requestId, promiseWrap)
+
+        // the actual writing of the json to the tcp stream
+        socket.write(JSON.stringify(message) + '\n')
+        return promise
     }
 
-    sendRequest(requestObject, socket) {
-        this.requests.set(requestObject.requestId, requestObject)
-        socket.write(JSON.stringify(requestObject.message) + '\n')
-    }
-    
+    // invoked when parsing the stream discovers a json object with a `responseId`
     handleRequest(message) {
-        const responseId = message.responseId
+        const responseId = message.responseId        
+        const promiseWrap = this.requests.get(responseId)
+        if (promiseWrap) {
+            promiseWrap.resolve(message)
+        }
         delete message.responseId
-        this.requests.get(responseId).callback(null, message)
         this.requests.delete(responseId)
     }
 

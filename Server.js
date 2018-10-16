@@ -1,8 +1,6 @@
 const tls = require('tls')
 const JSONStream = require('json-stream')
 const EventEmitter = require('events')
-const createError = require('create-error')
-const NotConnectedError = createError('NotConnectedError')
 const RequestModule = require('./RequestModule')
 
 class Server extends EventEmitter {
@@ -31,7 +29,7 @@ class Server extends EventEmitter {
                     } else if (message.responseId) {
                         this.requests.handleRequest(message)
                     } else {
-                        this.emit('message', message)
+                        this.emit('message', id, message)
                     }
                 } else {
                     // first message must be the password, and it must be correct, else destroy
@@ -40,7 +38,7 @@ class Server extends EventEmitter {
                         this.send(id, { authenticated: true })
                         this.emit('authenticated', id, socket)
                     } else {
-                        this.send(id, { message: 'failed to provide correct password' })
+                        this.send(id, { error: 'incorrect password' })
                         socket.destroy()
                     }
                 }
@@ -63,22 +61,26 @@ class Server extends EventEmitter {
         })
     }
 
+    close(cb) {
+        this.tlsServer.close(cb)
+    }
+
     send(id, object) {
         const socket = this.sockets.get(id)
         if (socket) {
             socket.write(JSON.stringify(object) + '\n')
         } else {
-            this.emit('error', new NotConnectedError('Not connected to client.', { originalMessage: object }))
+            this.emit('error', new Error('not connected'))
         }
     }
 
-    request(id, object, callback) {
+    async request(id, object) {
         const socket = this.sockets.get(id)
-        const requestObject = this.requests.createRequest(object, callback)
         if (socket && socket.isAuthenticated) {
-            this.requests.sendRequest(requestObject, socket)
+            return await this.requests.sendRequest(object, socket)
         } else {
-            this.requests.notConnected(requestObject)
+            const err = new Error('not connected or not authenticated')
+            return Promise.reject(err)
         }
     }
 }

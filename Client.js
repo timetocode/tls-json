@@ -1,8 +1,6 @@
 const tls = require('tls')
 const JSONStream = require('json-stream')
 const EventEmitter = require('events')
-const createError = require('create-error')
-const NotConnectedError = createError('NotConnectedError')
 const RequestModule = require('./RequestModule')
 
 class Client extends EventEmitter {
@@ -13,7 +11,9 @@ class Client extends EventEmitter {
         this.isConnected = false
         this.isAuthenticated = false
         this.reconnectInterval = config.reconnectInterval || 0
+        this.attemptsToReconnect = true
         this.requests = new RequestModule(config.requestTimeout || 10000)
+        this.supressNextECONNREFUSED = false
 
         this.connect = () => {
             this.socket = tls.connect(config.port, config.host, config.options, () => {
@@ -33,6 +33,8 @@ class Client extends EventEmitter {
                     } else {
                         this.emit('message', message)
                     }
+                } else if (message.error) {
+                    this.emit('message', message)
                 } else {
                     if (message.authenticated === true) {
                         this.isAuthenticated = true
@@ -42,20 +44,31 @@ class Client extends EventEmitter {
             })
 
             this.socket.on('connect', () => {
+                this.supressNextECONNREFUSED = false
                 this.isConnected = true
                 clearInterval(this.intervalRef)
             })
 
             this.socket.on('error', err => {
+                if (this.supressNextECONNREFUSED && err.code && err.code === 'ECONNREFUSED') {
+                    return
+                }
                 this.emit('error', err)
             })
 
+            this.socket.on('end', () => {
+
+            })
+
             this.socket.on('close', () => {
-                this.requests.connectionLost()
+                this.requests.cancelAll()
                 this.isConnected = false
                 this.isAuthenticated = false
                 this.beginReconnectInterval()
-                this.emit('close')
+                if (!this.supressNextECONNREFUSED) {
+                    this.emit('close')
+                }
+                
             })
         }
 
@@ -68,7 +81,9 @@ class Client extends EventEmitter {
         if (this.reconnectInterval > 0 && !this.isConnected && now - this.reconnectInterval > this.lastReconnectTimestamp) {
             this.lastReconnectTimestamp = now
             this.intervalRef = setTimeout(() => {
-                if (!this.isConnected) {
+                if (!this.isConnected && this.attemptsToReconnect) {
+                    this.supressNextECONNREFUSED = true
+                    this.emit('reconnectAttempt')
                     this.connect()
                 }
             }, this.reconnectInterval)
@@ -79,25 +94,25 @@ class Client extends EventEmitter {
         if (this.socket && this.isAuthenticated) {
             this.socket.write(JSON.stringify(object) + '\n')
         } else {
-            this.emit('error', new NotConnectedError('Not connected to server.', { originalMessage: object }))
+            this.emit('error', new Error('not connected or not authenticated'))
         }
     }
 
-    request(object, callback) {
-        const requestObject = this.requests.createRequest(object, callback)
+    async request(object) {
         if (this.socket && this.isAuthenticated) {
-            this.requests.sendRequest(requestObject, this.socket)
+            return await this.requests.sendRequest(object, this.socket)
         } else {
-            this.requests.notConnected(requestObject)
+            const err = new Error('not connected or not authenticated')
+            return Promise.reject(err)
         }
     }
 
     disconnect() {
         if (this.socket) {
+            this.socket.end()
             this.socket.destroy()
         }
         clearInterval(this.intervalRef)
-        this.requests.notConnected(requestObject)
         this.attemptsToReconnect = false
     }
 }
