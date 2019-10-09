@@ -30,9 +30,9 @@ class RequestModule {
             setTimeout(() => {
                 this.requests.delete(requestId)
                 reject(new Error('request timeout'))
-            }, this.requestTimeout)         
+            }, this.requestTimeout)
         })
-        promiseWrap.promise = promise 
+        promiseWrap.promise = promise
         this.requests.set(requestId, promiseWrap)
 
         // the actual writing of the json to the tcp stream
@@ -42,7 +42,7 @@ class RequestModule {
 
     // invoked when parsing the stream discovers a json object with a `responseId`
     handleRequest(message) {
-        const responseId = message.responseId        
+        const responseId = message.responseId
         const promiseWrap = this.requests.get(responseId)
         if (promiseWrap) {
             promiseWrap.resolve(message)
@@ -63,6 +63,16 @@ class RequestModule {
                 }
             }
         )
+    }
+
+    client_handlePing(message, tlsNode) {
+        const requestId = message.requestId
+        delete message.requestId
+
+        tlsNode.send({
+            responseId: requestId,
+            __pong: message.__ping
+        })
     }
 
     server_handleResponse(id, message, tlsNode) {

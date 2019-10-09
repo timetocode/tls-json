@@ -31,7 +31,13 @@ class Client extends EventEmitter {
                     } else if (message.responseId) {
                         this.requests.handleRequest(message)
                     } else {
-                        this.emit('message', message)
+                        if (message.__ping) {
+                            // keep alive
+                            this.send({ __pong: message.__ping })
+                        } else {
+                            // regular message
+                            this.emit('message', message)
+                        }
                     }
                 } else if (message.error) {
                     this.emit('message', message)
@@ -56,9 +62,7 @@ class Client extends EventEmitter {
                 this.emit('error', err)
             })
 
-            this.socket.on('end', () => {
-
-            })
+            this.socket.on('end', () => { })
 
             this.socket.on('close', () => {
                 this.requests.cancelAll()
@@ -68,7 +72,7 @@ class Client extends EventEmitter {
                 if (!this.supressNextECONNREFUSED) {
                     this.emit('close')
                 }
-                
+
             })
         }
 

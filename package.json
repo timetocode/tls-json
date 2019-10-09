@@ -1,6 +1,6 @@
 {
   "name": "tls-json",
-  "version": "3.0.0",
+  "version": "3.2.0",
   "description": "A node.js client and server api for sending json over tls.",
   "main": "index.js",
   "author": "Alex Bennett // timetocode",
@@ -28,5 +28,6 @@
     "reconnect",
     "promise",
     "resilient"
-  ]
+  ],
+  "devDependencies": {}
 }
