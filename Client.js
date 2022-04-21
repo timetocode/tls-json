@@ -6,7 +6,6 @@ const RequestModule = require('./RequestModule')
 class Client extends EventEmitter {
     constructor(config) {
         super()
-        this.lastReconnectTimestamp = -1
         this.socket = null
         this.isConnected = false
         this.isAuthenticated = false
@@ -72,7 +71,6 @@ class Client extends EventEmitter {
                 if (!this.supressNextECONNREFUSED) {
                     this.emit('close')
                 }
-
             })
         }
 
@@ -81,9 +79,7 @@ class Client extends EventEmitter {
     }
 
     beginReconnectInterval() {
-        const now = Date.now()
-        if (this.reconnectInterval > 0 && !this.isConnected && now - this.reconnectInterval > this.lastReconnectTimestamp) {
-            this.lastReconnectTimestamp = now
+        if (this.reconnectInterval > 0) {
             this.intervalRef = setTimeout(() => {
                 if (!this.isConnected && this.attemptsToReconnect) {
                     this.supressNextECONNREFUSED = true

@@ -27,8 +27,11 @@ The api is essentially the following events: `authenticated`, `close`, `error`, 
 
 Client and server have essentially the same api for communication, with main difference being that the outgoing server calls take a client `id` as an argument (that's who the message goes to). The client on the other hand invokes `send` and `request` without an `id` because all of its messages can only go to the server.
 
-## New to version 3.2+
-A keepalive ping/pong have been added (works automatically, no api changes, but configurable if desired).
+## Changes
+* 3.2.0 - A keepalive ping/pong have been added (works automatically, no api changes, but configurable if desired).
+* 3.3.0
+    * fixed a bug where a client with a flickering connection could stop attempting to reconnect (occurred specifically if the client reconnected and then lost connection twice within the "reconnectInterval" timeframe)
+    * added jasmine (dev dependency)
 
 ## Server API
 
@@ -46,9 +49,9 @@ const server = new TLSServer({
         rejectUnauthorized: true
     },
     requestTimeout: 10000, // milliseconds until a request is considered timedout
-    keepAliveInterval: 10000, // milliseconds interval to check if the socket is alive
+    keepAliveInterval: 10000, // millisecond interval fequency to ping sockets
     keepAliveTimeout: 5000 // milliseconds until a socket is considered dead if it hasn't responded
-    password: 'this string is a password, change it'
+    password: 'this string is a password, change it' // password clients must supply
 })
 
 // client connected and supplied password correctly
@@ -115,7 +118,7 @@ const client = new TLSClient({
     },    
     host: 'localhost',
     port: 8888,
-    reconnectInterval: 5000, // milliseocnds required! defaults to 0 which is no reconnecting
+    reconnectInterval: 5000, // (in milliseconds) if set to 0, will not attempt to reconnect
     requestTimeout: 10000,
     password: 'this string is a password, change it'
 })
@@ -157,18 +160,16 @@ try {
 } catch (err) {
 
 }
-
-// and of course responding to requests is outgoing as well
 ```
 
-Clients with a reconnectInterval > 0 will automatically attempt to reconnect to a server after losing connection. Clients will *not* automatically send messages that failed to send prior to losing connection (this may be done manually if desired, but be careful about the volume).
+Clients with a reconnectInterval > 0 will automatically attempt to reconnect to a server after losing connection. Clients will *not* automatically send messages that failed to send prior to losing connection (though the api provides enough information to figure out which these are should you wish to resend them).
 
 ## Errors
-These are errors that can come through the error eventer handler, or through the request promises
+These are errors that can come through the error event handler, or through the request promises
 
-* any socket errors such as `ECONNRESET`, or `ECONNREFUSED`, etc
+* any and all underlying socket errors such as `ECONNRESET`, or `ECONNREFUSED`, etc
 * 'not connected or not authenticated' - when using `send` this is emitted if the client or server has not yet authenticated or is not connected, when using `request` this same error will come through the promise
-* `request timeout` - when no response comes back within `requestTimeout`, most likely caused by forgetting to use `res.send()`
-* `connection lost` - rare, but can occur if a request is made but the connection is lost before the other service can respond
+* `request timeout` - when no response comes back within `requestTimeout`
 
-For spam reasons when a client is in reconnect mode the `ECONNREFUSED` errors and socket `close` errors are suppressed. If you'd like to log how often reconnect attempts occur anyways, listen for `reconnectAttempt`.
+For spam reasons when a client is in reconnect mode the `ECONNREFUSED` errors and socket `close` errors are suppressed until a valid connection is resumed. If you'd like to log how often reconnect attempts occur anyways, listen for `reconnectAttempt`.
+
